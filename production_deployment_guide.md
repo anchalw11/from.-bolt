@@ -42,13 +42,6 @@ This project is configured to run with Docker Compose, which simplifies the mana
         RUN npm install
         COPY . .
         RUN npm run build
-
-        # 2. Serve the app with Nginx
-        FROM nginx:stable-alpine
-        COPY --from=build /app/dist /usr/share/nginx/html
-        COPY nginx.conf /etc/nginx/conf.d/default.conf
-        EXPOSE 80
-        CMD ["nginx", "-g", "daemon off;"]
         ```
 
     -   **`Dockerfile` for Node.js services (e.g., `customer-service`):**
@@ -71,28 +64,28 @@ This project is configured to run with Docker Compose, which simplifies the mana
         CMD ["gunicorn", "--bind", "0.0.0.0:5000", "wsgi:application"]
         ```
 
-2.  **Create an Nginx configuration file** (`nginx.conf`) in the root directory to act as a reverse proxy:
+2.  **Create a Caddy configuration file** (`Caddyfile`) in the root directory to act as a reverse proxy:
 
-    ```nginx
-    server {
-        listen 80;
-        server_name your-domain.com;
+    ```caddy
+    your-domain.com {
+        # Enable compression
+        encode gzip
 
-        location / {
-            root   /usr/share/nginx/html;
-            index  index.html index.htm;
-            try_files $uri $uri/ /index.html;
+        # Set up logging
+        log {
+            output file /var/log/caddy/access.log
         }
 
-        location /api/journal {
-            proxy_pass http://journal:5000;
+        # Reverse proxy API requests to the Flask backend
+        handle_path /api/* {
+            reverse_proxy journal:5000
         }
 
-        location /api/customer-service {
-            proxy_pass http://customer_service:3001;
+        # Serve the static React application
+        handle {
+            root * /usr/share/caddy
+            file_server
         }
-
-        # Add other services here...
     }
     ```
 
@@ -102,33 +95,9 @@ This project is configured to run with Docker Compose, which simplifies the mana
     docker-compose up --build -d
     ```
 
-## 4. SSL/TLS with Let's Encrypt
+## 4. SSL/TLS with Caddy
 
-For a production environment, it is highly recommended to use HTTPS. You can use Certbot to obtain a free SSL/TLS certificate from Let's Encrypt.
-
-1.  **Modify your `docker-compose.yml`** to include Certbot:
-
-    ```yaml
-    # ... (other services)
-
-    certbot:
-      image: certbot/certbot
-      volumes:
-        - ./certbot/conf:/etc/letsencrypt
-        - ./certbot/www:/var/www/certbot
-      entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
-    ```
-
-2.  **Obtain the certificate**:
-
-    ```bash
-    docker-compose run --rm --entrypoint "\
-      certbot certonly --webroot -w /var/www/certbot \
-      --email your-email@example.com -d your-domain.com \
-      --rsa-key-size 4096 --agree-tos --no-eff-email --force-renewal" certbot
-    ```
-
-3.  **Update your Nginx configuration** to use the SSL certificate and redirect HTTP to HTTPS.
+Caddy automatically handles SSL/TLS certificates for you. As long as your domain is correctly pointing to your server's IP address, Caddy will obtain and renew a certificate from Let's Encrypt for you.
 
 ## 5. Managing the Application
 

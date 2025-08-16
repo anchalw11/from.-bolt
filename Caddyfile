@@ -1,0 +1,20 @@
+your-domain.com {
+    # Enable compression
+    encode gzip
+
+    # Set up logging
+    log {
+        output file /var/log/caddy/access.log
+    }
+
+    # Reverse proxy API requests to the Flask backend
+    handle_path /api/* {
+        reverse_proxy journal:5000
+    }
+
+    # Serve the static React application
+    handle {
+        root * /usr/share/caddy
+        file_server
+    }
+}
