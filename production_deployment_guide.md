@@ -76,16 +76,13 @@ This project is configured to run with Docker Compose, which simplifies the mana
             output file /var/log/caddy/access.log
         }
 
-        # Reverse proxy API requests to the Flask backend
-        handle_path /api/* {
-            reverse_proxy journal:5000
-        }
+        # Reverse proxy API requests to the Flask backend, keeping the /api prefix
+        reverse_proxy /api/* journal:5000
 
-        # Serve the static React application
-        handle {
-            root * /usr/share/caddy
-            file_server
-        }
+        # Serve the static React application and handle client-side routing for the SPA
+        root * /usr/share/caddy
+        try_files {path} /index.html
+        file_server
     }
     ```
 
