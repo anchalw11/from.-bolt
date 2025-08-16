@@ -57,9 +57,6 @@ const DashboardConcept1 = ({ onLogout }: { onLogout: () => void }) => {
   const [selectedAccount, setSelectedAccount] = useState('');
   const [showConsentForm, setShowConsentForm] = useState(false);
   const [tradingState, setTradingState] = useState<TradingState | null>(null);
-  const [userAccounts, setUserAccounts] = useState<any[]>([]);
-  const [performanceData, setPerformanceData] = useState<any[]>([]);
-  const [currentAccount, setCurrentAccount] = useState<any>(null);
   const [marketStatus, setMarketStatus] = useState<any>(null);
   const [selectedTimezone, setSelectedTimezone] = useState('UTC');
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -84,148 +81,8 @@ const DashboardConcept1 = ({ onLogout }: { onLogout: () => void }) => {
       if (user?.email) {
         try {
           setIsLoadingData(true);
-          
-          // Try to fetch from API first
-          let apiData = null;
-          try {
-            const response = await api.get(`/dashboard-data/${encodeURIComponent(user.email)}`);
-            apiData = response.data;
-            console.log('Dashboard data loaded from API:', apiData);
-          } catch (error) {
-            console.log('API fetch failed, using localStorage fallback:', error);
-          }
-
-          // Load from localStorage as fallback or supplement
-          const userKey = `user_data_${user.email}`;
-          const savedUserData = localStorage.getItem(userKey);
-          const questionnaireAnswers = localStorage.getItem('questionnaireAnswers');
-          const comprehensivePlan = localStorage.getItem('comprehensive_plan');
-          
-          let localData = null;
-          if (savedUserData) {
-            try {
-              localData = JSON.parse(savedUserData);
-            } catch (e) {
-              console.error('Error parsing local user data:', e);
-            }
-          }
-
-          let questionnaireData = null;
-          if (questionnaireAnswers) {
-            try {
-              questionnaireData = JSON.parse(questionnaireAnswers);
-            } catch (e) {
-              console.error('Error parsing questionnaire data:', e);
-            }
-          }
-
-          let planData = null;
-          if (comprehensivePlan) {
-            try {
-              planData = JSON.parse(comprehensivePlan);
-            } catch (e) {
-              console.error('Error parsing comprehensive plan:', e);
-            }
-          }
-
-          // Merge all data sources with priority: API > localStorage > questionnaire > defaults
-          const mergedData = {
-            userProfile: {
-              propFirm: apiData?.userProfile?.propFirm || 
-                       questionnaireData?.propFirm || 
-                       localData?.tradingPlan?.userProfile?.propFirm || 
-                       'Not Set',
-              accountType: apiData?.userProfile?.accountType || 
-                          questionnaireData?.accountType || 
-                          localData?.tradingPlan?.userProfile?.accountType || 
-                          'Not Set',
-              accountSize: apiData?.userProfile?.accountSize || 
-                          questionnaireData?.accountSize || 
-                          localData?.tradingPlan?.userProfile?.accountSize || 
-                          'Not Set',
-              experience: apiData?.userProfile?.experience || 
-                         questionnaireData?.experience || 
-                         localData?.tradingPlan?.userProfile?.experience || 
-                         'Not Set',
-              tradesPerDay: apiData?.userProfile?.tradesPerDay || 
-                           questionnaireData?.tradesPerDay || 
-                           localData?.tradingPlan?.userProfile?.tradesPerDay || 
-                           'Not Set',
-              riskPerTrade: apiData?.userProfile?.riskPerTrade || 
-                           (questionnaireData?.riskPercentage ? `${questionnaireData.riskPercentage}%` : null) ||
-                           localData?.tradingPlan?.riskParameters?.baseTradeRiskPct || 
-                           'Not Set',
-              riskReward: apiData?.userProfile?.riskReward || 
-                         localData?.tradingPlan?.riskParameters?.minRiskReward || 
-                         '1:2',
-              session: apiData?.userProfile?.session || 
-                      questionnaireData?.tradingSession || 
-                      localData?.tradingPlan?.userProfile?.tradingSession || 
-                      'Not Set'
-            },
-            performance: {
-              accountBalance: apiData?.performance?.accountBalance || 
-                            (questionnaireData?.hasAccount === 'yes' ? questionnaireData?.accountEquity : questionnaireData?.accountSize) ||
-                            localData?.tradingPlan?.userProfile?.accountEquity || 
-                            100000,
-              winRate: apiData?.performance?.winRate || 0,
-              totalTrades: apiData?.performance?.totalTrades || 0,
-              totalPnL: apiData?.performance?.totalPnL || 0
-            },
-            propFirmRules: apiData?.propFirmRules || planData?.prop_firm_analysis?.extracted_rules || {
-              daily_loss_limit: 'Not Set',
-              max_drawdown: 'Not Set',
-              profit_target_phase1: 'Not Set',
-              min_trading_days: 'Not Set',
-              news_trading: 'Not Set',
-              weekend_holding: 'Not Set'
-            },
-            riskProtocol: apiData?.riskProtocol || planData?.risk_calculations || {
-              max_daily_risk: 'Not Set',
-              max_position_size: questionnaireData?.riskPercentage ? `${questionnaireData.riskPercentage}%` : 'Not Set',
-              min_rr_ratio: '1:2',
-              max_weekly_drawdown: '5%'
-            },
-            assets: {
-              crypto: apiData?.assets?.crypto || questionnaireData?.cryptoAssets || [],
-              forex: apiData?.assets?.forex || questionnaireData?.forexAssets || []
-            }
-          };
-
-          setDashboardData(mergedData);
-          console.log('Merged dashboard data:', mergedData);
-
-          // Update trading plan context if we have new data
-          if (questionnaireData || planData) {
-            const tradingPlanData: TradingPlan = {
-              userProfile: {
-                initialBalance: mergedData.performance.accountBalance,
-                accountEquity: mergedData.performance.accountBalance,
-                tradesPerDay: mergedData.userProfile.tradesPerDay,
-                tradingSession: mergedData.userProfile.session,
-                cryptoAssets: mergedData.assets.crypto,
-                forexAssets: mergedData.assets.forex,
-                hasAccount: questionnaireData?.hasAccount || 'no',
-                experience: mergedData.userProfile.experience
-              },
-              riskParameters: {
-                maxDailyRisk: planData?.risk_calculations?.max_daily_risk || 0,
-                maxDailyRiskPct: planData?.risk_calculations?.daily_risk_utilization || '0%',
-                baseTradeRisk: planData?.risk_calculations?.risk_per_trade || 0,
-                baseTradeRiskPct: mergedData.userProfile.riskPerTrade,
-                minRiskReward: mergedData.userProfile.riskReward
-              },
-              trades: planData?.detailed_trades || [],
-              propFirmCompliance: {
-                dailyLossLimit: planData?.prop_firm_analysis?.extracted_rules?.daily_loss_limit || 'Not Set',
-                totalDrawdownLimit: planData?.prop_firm_analysis?.extracted_rules?.max_drawdown || 'Not Set',
-                profitTarget: planData?.prop_firm_analysis?.extracted_rules?.profit_target_phase1 || 'Not Set',
-                consistencyRule: 'Maintain steady performance'
-              }
-            };
-            updateTradingPlan(tradingPlanData);
-          }
-
+          const response = await api.get(`/dashboard-data/${encodeURIComponent(user.email)}`);
+          setDashboardData(response.data);
         } catch (error) {
           console.error('Error initializing dashboard data:', error);
         } finally {
@@ -325,46 +182,6 @@ const DashboardConcept1 = ({ onLogout }: { onLogout: () => void }) => {
     }
   }, [user?.email, tradingPlan, propFirm, accountConfig]);
 
-  const fetchAccounts = async () => {
-    try {
-      const response = await api.get('/accounts');
-      setUserAccounts(response.data);
-      if (response.data.length > 0) {
-        setSelectedAccount(response.data[0].id);
-      }
-    } catch (error) {
-      console.error('Error fetching accounts:', error);
-    }
-  };
-
-  useEffect(() => {
-    if (user) {
-      fetchAccounts();
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (selectedAccount) {
-      const fetchPerformanceData = async () => {
-        try {
-          const response = await api.get(`/performance?account_id=${selectedAccount}`);
-          setPerformanceData(response.data);
-        } catch (error) {
-          console.error('Error fetching performance data:', error);
-        }
-      };
-
-      fetchPerformanceData();
-    }
-  }, [selectedAccount]);
-
-  useEffect(() => {
-    if (userAccounts.length > 0 && selectedAccount) {
-      const account = userAccounts.find((acc) => acc.id === selectedAccount) || userAccounts[0];
-      setCurrentAccount(account);
-    }
-  }, [selectedAccount, userAccounts]);
-
   useEffect(() => {
     const initState = async () => {
       if (user && dashboardData && dashboardData.performance) {
@@ -459,21 +276,21 @@ const DashboardConcept1 = ({ onLogout }: { onLogout: () => void }) => {
     }
   }, [tradingState, user?.email]);
 
-  if (!user) {
+  if (isLoadingData) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center font-inter">
         <FuturisticBackground />
         <FuturisticCursor />
         <div className="relative z-10 text-center">
-          <div className="text-blue-400 text-xl animate-pulse mb-4">Loading User...</div>
+          <div className="text-blue-400 text-xl animate-pulse mb-4">Loading Dashboard...</div>
         </div>
       </div>
     );
   }
 
-  const hasProAccess = user && ['pro', 'professional', 'elite', 'enterprise'].includes(user.membershipTier);
-  const hasJournalAccess = user && ['pro', 'professional', 'elite', 'enterprise'].includes(user.membershipTier);
-  const hasEnterpriseAccess = user && ['enterprise'].includes(user.membershipTier);
+  const hasProAccess = user && ['pro', 'professional', 'elite', 'enterprise'].includes(user.membershipTier || '');
+  const hasJournalAccess = user && ['pro', 'professional', 'elite', 'enterprise'].includes(user.membershipTier || '');
+  const hasEnterpriseAccess = user && ['enterprise'].includes(user.membershipTier || '');
   const hasMultiAccountAccess = hasProAccess || hasEnterpriseAccess;
 
   const handleAccountChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -552,9 +369,9 @@ const DashboardConcept1 = ({ onLogout }: { onLogout: () => void }) => {
       <div className="holo-card">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-3xl font-bold text-white mb-2">Welcome, {user.name}</h2>
+            <h2 className="text-3xl font-bold text-white mb-2">Welcome, {user?.name}</h2>
             <p className="text-gray-400">
-              Your {user.membershipTier.charAt(0).toUpperCase() + user.membershipTier.slice(1)} Dashboard
+              Your {user?.membershipTier?.charAt(0).toUpperCase() + (user?.membershipTier?.slice(1) || '')} Dashboard
             </p>
             
             {/* Display questionnaire data from dashboard */}
@@ -928,7 +745,9 @@ const DashboardConcept1 = ({ onLogout }: { onLogout: () => void }) => {
       setTradingState(finalState);
       
       // Save to localStorage immediately
-      localStorage.setItem(`trading_state_${user.email}`, JSON.stringify(finalState));
+      if (user?.email) {
+        localStorage.setItem(`trading_state_${user.email}`, JSON.stringify(finalState));
+      }
 
       // Try to save to backend as well
       try {
@@ -1139,7 +958,7 @@ const DashboardConcept1 = ({ onLogout }: { onLogout: () => void }) => {
                   onChange={handleAccountChange}
                   className="w-full bg-gray-800 text-white p-2 rounded border border-gray-600"
                 >
-                  {userAccounts.map(account => (
+                  {accounts.map((account: any) => (
                     <option key={account.id} value={account.id}>{account.account_name}</option>
                   ))}
                 </select>

@@ -1,105 +1,99 @@
 # Production Deployment Guide
 
-This guide provides instructions for setting up and deploying the application in a production environment.
+This guide provides instructions for deploying the application to a production environment.
 
-## 1. Prerequisites
+## Prerequisites
 
-- Docker and Docker Compose installed on your server.
-- A domain name pointing to your server's IP address.
-- A production-ready database (e.g., PostgreSQL, MongoDB).
+- Node.js and npm
+- Python 3 and pip
+- A production-ready web server (e.g., Gunicorn, uWSGI)
+- A reverse proxy (e.g., Nginx, Caddy)
 
-## 2. Initial Setup
+## 1. Install Dependencies
 
-1.  **Clone the repository** to your production server.
-2.  **Run the setup script** to install all dependencies and build the frontend:
+### Frontend
 
-    ```bash
-    chmod +x setup_production.sh
-    ./setup_production.sh
-    ```
+Install the frontend dependencies using npm:
 
-3.  **Configure environment variables**:
+```bash
+npm install
+```
 
-    -   Copy the `.env.production` file to `.env`:
-        ```bash
-        cp .env.production .env
-        ```
-    -   Edit the `.env` file and replace the placeholder values with your actual production secrets and configuration.
+### Backend
 
-## 3. Dockerized Deployment
+Install the backend dependencies using pip:
 
-This project is configured to run with Docker Compose, which simplifies the management of the multi-service application.
+```bash
+pip install -r journal/requirements.txt
+```
 
-1.  **Create Dockerfiles** for each service. You will need to create a `Dockerfile` in each service's directory (`journal`, `customer-service`, etc.) and a `Dockerfile.frontend` in the root directory.
+## 2. Build the Frontend
 
-    -   **`Dockerfile.frontend` (root directory):**
-        ```dockerfile
-        # Use a multi-stage build to keep the final image small
-        # 1. Build the React app
-        FROM node:18 AS build
-        WORKDIR /app
-        COPY package*.json ./
-        RUN npm install
-        COPY . .
-        RUN npm run build
-        ```
+Build the frontend for production using the `build` script:
 
-    -   **`Dockerfile` for Node.js services (e.g., `customer-service`):**
-        ```dockerfile
-        FROM node:18-alpine
-        WORKDIR /app
-        COPY package*.json ./
-        RUN npm install --production
-        COPY . .
-        CMD ["node", "server.js"]
-        ```
+```bash
+npm run build
+```
 
-    -   **`Dockerfile` for Python services (e.g., `journal`):**
-        ```dockerfile
-        FROM python:3.9-slim
-        WORKDIR /app
-        COPY requirements.txt .
-        RUN pip install --no-cache-dir -r requirements.txt
-        COPY . .
-        CMD ["gunicorn", "--bind", "0.0.0.0:5000", "wsgi:application"]
-        ```
+This will create a `dist` directory with the optimized and minified frontend assets.
 
-2.  **Create a Caddy configuration file** (`Caddyfile`) in the root directory to act as a reverse proxy:
+## 3. Run the Backend
 
-    ```caddy
-    your-domain.com {
-        # Enable compression
-        encode gzip
+The backend is a Flask application that can be run using a production-ready web server like Gunicorn.
 
-        # Set up logging
-        log {
-            output file /var/log/caddy/access.log
-        }
+### Example with Gunicorn
 
-        # Reverse proxy API requests to the Flask backend, keeping the /api prefix
-        reverse_proxy /api/* journal:5000
+Install Gunicorn:
 
-        # Serve the static React application and handle client-side routing for the SPA
-        root * /usr/share/caddy
-        try_files {path} /index.html
-        file_server
+```bash
+pip install gunicorn
+```
+
+Run the application with Gunicorn:
+
+```bash
+gunicorn --bind 0.0.0.0:5000 wsgi:app
+```
+
+This will start the Flask application on port 5000.
+
+## 4. Configure a Reverse Proxy
+
+A reverse proxy is recommended for serving the frontend and proxying API requests to the backend.
+
+### Example with Nginx
+
+Create an Nginx configuration file with the following content:
+
+```nginx
+server {
+    listen 80;
+    server_name your_domain.com;
+
+    location / {
+        root /path/to/your/project/dist;
+        try_files $uri /index.html;
     }
-    ```
 
-3.  **Build and run the application** with Docker Compose:
+    location /api {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
 
-    ```bash
-    docker-compose up --build -d
-    ```
+Replace `your_domain.com` with your domain and `/path/to/your/project/dist` with the actual path to the `dist` directory.
 
-## 4. SSL/TLS with Caddy
+## 5. Environment Variables
 
-Caddy automatically handles SSL/TLS certificates for you. As long as your domain is correctly pointing to your server's IP address, Caddy will obtain and renew a certificate from Let's Encrypt for you.
+Create a `.env.production` file in the root of the project with the following environment variables:
 
-## 5. Managing the Application
+```
+FLASK_ENV=production
+DATABASE_URL=your_production_database_url
+SECRET_KEY=your_production_secret_key
+```
 
--   **Start the application**: `docker-compose up -d`
--   **Stop the application**: `docker-compose down`
--   **View logs**: `docker-compose logs -f <service_name>`
-
-This guide provides a comprehensive overview of the deployment process. You may need to adjust the configurations based on your specific server environment and requirements.
+Replace the values with your production configuration.
