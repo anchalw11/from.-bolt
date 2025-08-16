@@ -19,18 +19,8 @@ def create_app(config_object='journal.config.DevelopmentConfig'):
     # Initialize extensions
     db.init_app(app)
     jwt = JWTManager(app)
-    CORS(app, resources={r"/*": {"origins": app.config.get("CORS_ORIGINS", "*")}})
-    socketio.init_app(app, cors_allowed_origins=app.config.get("CORS_ORIGINS", "*"))
-
-    # Add OPTIONS method handler for CORS preflight
-    @app.before_request
-    def handle_preflight():
-        if request.method == "OPTIONS":
-            response = jsonify()
-            response.headers.add("Access-Control-Allow-Origin", "*")
-            response.headers.add('Access-Control-Allow-Headers', "*")
-            response.headers.add('Access-Control-Allow-Methods', "*")
-            return response
+    CORS(app)
+    socketio.init_app(app, cors_allowed_origins="*")
 
     # Add method not allowed handler
     @app.errorhandler(405)
