@@ -13,10 +13,8 @@ auth_bp = Blueprint('auth_bp', __name__)
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
-@auth_bp.route('/register', methods=['POST', 'OPTIONS'])
+@auth_bp.route('/register', methods=['POST'])
 def register():
-    if request.method == 'OPTIONS':
-        return '', 200
     try:
         data = request.get_json()
         if data is None:
@@ -69,10 +67,8 @@ def register():
     
     return jsonify(access_token=access_token), 201
 
-@auth_bp.route('/login', methods=['POST', 'OPTIONS'])
+@auth_bp.route('/login', methods=['POST'])
 def login():
-    if request.method == 'OPTIONS':
-        return '', 200
     data = request.get_json()
     if not data:
         return jsonify({"msg": "Missing JSON in request"}), 400
