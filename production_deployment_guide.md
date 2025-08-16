@@ -1,99 +1,229 @@
-# Production Deployment Guide
+# Trading Journal - Production Deployment Guide
 
-This guide provides instructions for deploying the application to a production environment.
+## 🚀 Quick Start
 
-## Prerequisites
-
-- Node.js and npm
-- Python 3 and pip
-- A production-ready web server (e.g., Gunicorn, uWSGI)
-- A reverse proxy (e.g., Nginx, Caddy)
-
-## 1. Install Dependencies
-
-### Frontend
-
-Install the frontend dependencies using npm:
-
+### Local Testing
 ```bash
-npm install
+# Run the complete deployment script
+python3 production_deployment_complete.py
+
+# Start the application
+python3 run_production.py
 ```
 
-### Backend
+### Server Deployment
 
-Install the backend dependencies using pip:
-
+#### 1. Prepare Server
 ```bash
-pip install -r journal/requirements.txt
+# Update system
+sudo apt update && sudo apt upgrade -y
+
+# Install required packages
+sudo apt install python3 python3-pip python3-venv nginx supervisor -y
+
+# Install Node.js (if not already installed)
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
 ```
 
-## 2. Build the Frontend
-
-Build the frontend for production using the `build` script:
-
+#### 2. Deploy Application
 ```bash
-npm run build
+# Clone your repository
+git clone <your-repo-url> /var/www/trading-journal
+cd /var/www/trading-journal
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Run deployment script
+python3 production_deployment_complete.py
+
+# Set proper permissions
+sudo chown -R www-data:www-data /var/www/trading-journal
+sudo chmod -R 755 /var/www/trading-journal
 ```
 
-This will create a `dist` directory with the optimized and minified frontend assets.
-
-## 3. Run the Backend
-
-The backend is a Flask application that can be run using a production-ready web server like Gunicorn.
-
-### Example with Gunicorn
-
-Install Gunicorn:
-
+#### 3. Configure Nginx
 ```bash
-pip install gunicorn
+# Copy nginx configuration
+sudo cp nginx-trading-journal.conf /etc/nginx/sites-available/trading-journal
+
+# Update paths in the configuration file
+sudo nano /etc/nginx/sites-available/trading-journal
+# Replace /path/to/your/app with /var/www/trading-journal
+# Replace your-domain.com with your actual domain
+
+# Enable site
+sudo ln -s /etc/nginx/sites-available/trading-journal /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
-Run the application with Gunicorn:
-
+#### 4. Configure Systemd Service
 ```bash
-gunicorn --bind 0.0.0.0:5000 wsgi:app
+# Copy service file
+sudo cp trading-journal.service /etc/systemd/system/
+
+# Update paths in service file
+sudo nano /etc/systemd/system/trading-journal.service
+# Replace /path/to/your/app with /var/www/trading-journal
+
+# Enable and start service
+sudo systemctl daemon-reload
+sudo systemctl enable trading-journal
+sudo systemctl start trading-journal
+sudo systemctl status trading-journal
 ```
 
-This will start the Flask application on port 5000.
+## 🔧 Configuration
 
-## 4. Configure a Reverse Proxy
+### Environment Variables (.env.production)
+```bash
+# Security (CHANGE THESE!)
+SECRET_KEY=your_super_secret_production_key_change_this
+JWT_SECRET_KEY=your_jwt_secret_production_key_change_this
 
-A reverse proxy is recommended for serving the frontend and proxying API requests to the backend.
+# Database
+DATABASE_URL=sqlite:///instance/production.db
+# Or for PostgreSQL:
+# DATABASE_URL=postgresql://user:password@localhost:5432/trading_journal
 
-### Example with Nginx
+# CORS (Update with your domain)
+CORS_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
 
-Create an Nginx configuration file with the following content:
-
-```nginx
-server {
-    listen 80;
-    server_name your_domain.com;
-
-    location / {
-        root /path/to/your/project/dist;
-        try_files $uri /index.html;
-    }
-
-    location /api {
-        proxy_pass http://127.0.0.1:5000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-}
+# Admin
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD_HASH=pbkdf2:sha256:260000$your_hash_here
 ```
 
-Replace `your_domain.com` with your domain and `/path/to/your/project/dist` with the actual path to the `dist` directory.
+### SSL/HTTPS Setup
+```bash
+# Install Certbot
+sudo apt install certbot python3-certbot-nginx -y
 
-## 5. Environment Variables
+# Get SSL certificate
+sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
 
-Create a `.env.production` file in the root of the project with the following environment variables:
-
+# Auto-renewal
+sudo crontab -e
+# Add: 0 12 * * * /usr/bin/certbot renew --quiet
 ```
-FLASK_ENV=production
-DATABASE_URL=your_production_database_url
-SECRET_KEY=your_production_secret_key
+
+## 🐛 Troubleshooting
+
+### Issue 1: Dashboard Flickering
+**Fixed in this deployment:**
+- Optimized React component re-renders
+- Reduced API call frequency
+- Added proper caching mechanisms
+
+### Issue 2: Error 405 on Account Creation
+**Fixed in this deployment:**
+- Added CORS preflight handling for all routes
+- Fixed HTTP method handling in Flask
+- Added proper OPTIONS request support
+
+### Issue 3: Admin MPIN Redirect
+**Fixed in this deployment:**
+- Improved token validation logic
+- Added fallback authentication for production
+- Fixed session persistence issues
+
+### Common Issues
+
+#### Application won't start
+```bash
+# Check logs
+sudo journalctl -u trading-journal -f
+
+# Check if port is in use
+sudo netstat -tlnp | grep :5000
+
+# Restart service
+sudo systemctl restart trading-journal
 ```
 
-Replace the values with your production configuration.
+#### Database errors
+```bash
+# Recreate database
+cd /var/www/trading-journal
+source venv/bin/activate
+python3 create_db.py
+```
+
+#### Permission errors
+```bash
+# Fix permissions
+sudo chown -R www-data:www-data /var/www/trading-journal
+sudo chmod -R 755 /var/www/trading-journal
+```
+
+## 📊 Monitoring
+
+### Check Application Status
+```bash
+# Service status
+sudo systemctl status trading-journal
+
+# Application logs
+sudo journalctl -u trading-journal -f
+
+# Nginx logs
+sudo tail -f /var/log/nginx/access.log
+sudo tail -f /var/log/nginx/error.log
+```
+
+### Performance Monitoring
+```bash
+# Install htop for system monitoring
+sudo apt install htop -y
+
+# Monitor processes
+htop
+
+# Check disk usage
+df -h
+
+# Check memory usage
+free -h
+```
+
+## 🔐 Security Checklist
+
+- [ ] Changed default SECRET_KEY and JWT_SECRET_KEY
+- [ ] Updated CORS_ORIGINS to your actual domain
+- [ ] Enabled HTTPS with SSL certificate
+- [ ] Set up firewall (ufw)
+- [ ] Regular security updates
+- [ ] Database backups configured
+- [ ] Admin MPIN changed from default (optional)
+
+## 🔄 Updates and Maintenance
+
+### Updating the Application
+```bash
+cd /var/www/trading-journal
+git pull origin main
+source venv/bin/activate
+python3 production_deployment_complete.py
+sudo systemctl restart trading-journal
+```
+
+### Database Backup
+```bash
+# For SQLite
+cp instance/production.db instance/backup_$(date +%Y%m%d_%H%M%S).db
+
+# For PostgreSQL
+pg_dump trading_journal > backup_$(date +%Y%m%d_%H%M%S).sql
+```
+
+## 📞 Support
+
+- **Admin MPIN**: 180623
+- **Default Admin Username**: admin
+- **Application Port**: 5000
+- **Database**: SQLite (default) or PostgreSQL
+
+For issues, check the troubleshooting section above or review the application logs.

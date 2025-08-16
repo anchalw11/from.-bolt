@@ -13,8 +13,12 @@ auth_bp = Blueprint('auth_bp', __name__)
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
-@auth_bp.route('/register', methods=['POST'])
+@auth_bp.route('/register', methods=['POST', 'OPTIONS'])
 def register():
+    # Handle CORS preflight request
+    if request.method == 'OPTIONS':
+        return '', 200
+        
     try:
         data = request.get_json()
         if data is None:
@@ -67,8 +71,12 @@ def register():
     
     return jsonify(access_token=access_token), 201
 
-@auth_bp.route('/login', methods=['POST'])
+@auth_bp.route('/login', methods=['POST', 'OPTIONS'])
 def login():
+    # Handle CORS preflight request
+    if request.method == 'OPTIONS':
+        return '', 200
+        
     data = request.get_json()
     if not data:
         return jsonify({"msg": "Missing JSON in request"}), 400
@@ -101,9 +109,13 @@ def login():
     )
     return jsonify(access_token=access_token), 200
 
-@auth_bp.route('/profile', methods=['GET'])
+@auth_bp.route('/profile', methods=['GET', 'OPTIONS'])
 @jwt_required()
 def profile():
+    # Handle CORS preflight request
+    if request.method == 'OPTIONS':
+        return '', 200
+        
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
 

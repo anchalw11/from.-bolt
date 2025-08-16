@@ -23,5 +23,8 @@ from journal import create_production_app
 app = create_production_app()
 
 if __name__ == "__main__":
-    # For development testing
+    print("🚀 Starting Trading Journal in Production Mode...")
+    print("📊 Dashboard will be available at: http://localhost:5000")
+    print("🔐 Admin MPIN: 180623")
+    print("⚡ Press Ctrl+C to stop the server")
     app.run(host='0.0.0.0', port=5000, debug=False)

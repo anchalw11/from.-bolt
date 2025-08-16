@@ -25,13 +25,24 @@ export const AdminProvider = ({ children }: { children: ReactNode }) => {
       if (token === 'mpin_authenticated_token') {
         return true;
       }
-      const response = await api.post('/admin/validate-token');
+      
+      // Set the authorization header for the request
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+      
+      const response = await api.post('/admin/validate-token', {}, { headers });
       return response.status === 200;
     } catch (error) {
       console.error('Token validation error:', error);
       // In production, if backend is not available, allow MPIN tokens
       if (token === 'mpin_authenticated_token') {
         return true;
+      }
+      // Also allow if it's a network error (backend might be down)
+      if ((error as any).code === 'NETWORK_ERROR' || (error as any).message?.includes('Network Error')) {
+        return token === 'mpin_authenticated_token';
       }
       return false;
     }
@@ -64,6 +75,7 @@ export const AdminProvider = ({ children }: { children: ReactNode }) => {
         const { access_token } = response.data;
         localStorage.setItem('admin_token', access_token);
         localStorage.setItem('admin_username', credentials.username);
+        localStorage.setItem('admin_login_time', new Date().toISOString());
         setAdmin({
           username: credentials.username,
           isAuthenticated: true,
@@ -74,6 +86,10 @@ export const AdminProvider = ({ children }: { children: ReactNode }) => {
       return false;
     } catch (error) {
       console.error('Admin login error:', error);
+      // In production, if backend is not available, fall back to MPIN
+      if ((error as any).code === 'NETWORK_ERROR' || (error as any).message?.includes('Network Error')) {
+        console.log('Backend unavailable, please use MPIN login');
+      }
       return false;
     }
   };
@@ -83,8 +99,11 @@ export const AdminProvider = ({ children }: { children: ReactNode }) => {
       // Admin MPIN is 180623
       if (mpin === '180623') {
         const adminUsername = 'admin';
+        const loginTime = new Date().toISOString();
         localStorage.setItem('admin_token', 'mpin_authenticated_token');
         localStorage.setItem('admin_username', adminUsername);
+        localStorage.setItem('admin_login_time', loginTime);
+        localStorage.setItem('admin_mpin_authenticated', 'true');
         setAdmin({
           username: adminUsername,
           isAuthenticated: true,
@@ -102,6 +121,8 @@ export const AdminProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_username');
+    localStorage.removeItem('admin_login_time');
+    localStorage.removeItem('admin_mpin_authenticated');
     setAdmin(null);
   };
 

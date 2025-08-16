@@ -14,13 +14,20 @@ logging.basicConfig(level=logging.INFO)
 ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
 ADMIN_PASSWORD_HASH = os.environ.get('ADMIN_PASSWORD_HASH', generate_password_hash('Str0ngP@ssw0rd!', method='pbkdf2:sha256'))
 
-@admin_auth_bp.route('/validate-token', methods=['POST'])
+@admin_auth_bp.route('/validate-token', methods=['POST', 'OPTIONS'])
 @jwt_required()
 def validate_token():
+    # Handle CORS preflight request
+    if request.method == 'OPTIONS':
+        return '', 200
     return jsonify(success=True), 200
 
-@admin_auth_bp.route('/login', methods=['POST'])
+@admin_auth_bp.route('/login', methods=['POST', 'OPTIONS'])
 def admin_login():
+    # Handle CORS preflight request
+    if request.method == 'OPTIONS':
+        return '', 200
+        
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')

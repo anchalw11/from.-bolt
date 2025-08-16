@@ -75,16 +75,35 @@ const DashboardConcept1 = ({ onLogout }: { onLogout: () => void }) => {
     }
   }, [user]);
 
-  // Initialize dashboard data from multiple sources
+  // Initialize dashboard data from multiple sources with caching
   useEffect(() => {
     const initializeDashboardData = async () => {
-      if (user?.email) {
+      if (user?.email && !dashboardData) { // Only fetch if we don't have data
         try {
           setIsLoadingData(true);
           const response = await api.get(`/dashboard-data/${encodeURIComponent(user.email)}`);
           setDashboardData(response.data);
         } catch (error) {
           console.error('Error initializing dashboard data:', error);
+          // Set default data to prevent infinite loading
+          setDashboardData({
+            userProfile: {
+              propFirm: 'Not Set',
+              accountType: 'Not Set',
+              accountSize: 'Not Set',
+              experience: 'Not Set',
+              tradesPerDay: 'Not Set',
+              riskPerTrade: 'Not Set',
+              riskReward: '1:Not Set',
+              session: 'Not Set'
+            },
+            performance: {
+              accountBalance: 0,
+              winRate: 0,
+              totalTrades: 0,
+              totalPnL: 0
+            }
+          });
         } finally {
           setIsLoadingData(false);
         }
@@ -92,25 +111,32 @@ const DashboardConcept1 = ({ onLogout }: { onLogout: () => void }) => {
     };
 
     initializeDashboardData();
-  }, [user?.email]);
+  }, [user?.email, dashboardData]);
 
-  // Update current time every second
+  // Update current time every minute instead of every second to reduce flickering
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-    }, 1000);
+    }, 60000); // Update every minute instead of every second
     return () => clearInterval(timer);
   }, []);
 
-  // Calculate market status using the new timezone service
+  // Calculate market status using the new timezone service with debouncing
   useEffect(() => {
-    const status = getMarketStatus(selectedTimezone);
-    setMarketStatus(status);
+    const timeoutId = setTimeout(() => {
+      const status = getMarketStatus(selectedTimezone);
+      setMarketStatus(status);
+    }, 100); // Debounce to prevent rapid updates
+    
+    return () => clearTimeout(timeoutId);
   }, [selectedTimezone, currentTime]);
 
-  // Fetch Forex Factory news
+  // Fetch Forex Factory news with better caching
   useEffect(() => {
     const fetchNews = async () => {
+      // Only fetch if not already loading
+      if (isLoadingNews) return;
+      
       setIsLoadingNews(true);
       try {
         const news = await fetchForexFactoryNews(selectedNewsDate, selectedCurrency, selectedTimezone);
@@ -122,11 +148,17 @@ const DashboardConcept1 = ({ onLogout }: { onLogout: () => void }) => {
       }
     };
 
-    fetchNews();
+    // Debounce the fetch to prevent rapid calls
+    const timeoutId = setTimeout(fetchNews, 500);
+    
     // Refresh news every 30 minutes
     const newsInterval = setInterval(fetchNews, 30 * 60 * 1000);
-    return () => clearInterval(newsInterval);
-  }, [selectedNewsDate, selectedCurrency, selectedTimezone]);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      clearInterval(newsInterval);
+    };
+  }, [selectedNewsDate, selectedCurrency, selectedTimezone, isLoadingNews]);
 
   const handleNewsDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedNewsDate(new Date(e.target.value));
